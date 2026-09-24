@@ -14,11 +14,12 @@ from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
+
 # Per spec: "sex Enum Male, Female, Other, Decline to Answer"
 ALLOWED_SEX_VALUES = {"male", "female", "other", "decline to answer"}
 
 # Per spec: "first_name/last_name: 1-50 chars, alphabetic + hyphens/apostrophes"
-NAME_PATTERN = re.compile(r"^[A-Za-z'\-]+$")
+NAME_PATTERN = re.compile(r"^[A-Za-z'-]+$")
 
 # Per spec: "state: Valid 2-letter U.S. state abbreviation"
 US_STATE_ABBREVIATIONS = {
@@ -35,6 +36,7 @@ ZIP_PATTERN = re.compile(r"^\d{5}(-\d{4})?$")
 
 
 class PatientBase(BaseModel):
+
     first_name: str = Field(..., min_length=1, max_length=50)
     last_name: str = Field(..., min_length=1, max_length=50)
     date_of_birth: date
@@ -50,7 +52,27 @@ class PatientBase(BaseModel):
     insurance_member_id: Optional[str] = None
     preferred_language: str = Field(default="English", max_length=100)
     emergency_contact_name: Optional[str] = None
-    emergency_contact_phone: Optional[str] = Field(default=None, min_length=10, max_length=10)
+    emergency_contact_phone: Optional[str] = Field(
+        default=None,
+        min_length=10,
+        max_length=10,
+    )
+
+    # Convert blank optional strings from Vapi ("") into None.
+    @field_validator(
+        "email",
+        "address_line_2",
+        "insurance_provider",
+        "insurance_member_id",
+        "emergency_contact_name",
+        "emergency_contact_phone",
+        mode="before",
+    )
+    @classmethod
+    def empty_optional_strings_to_none(cls, value):
+        if isinstance(value, str) and value.strip() == "":
+            return None
+        return value
 
     @field_validator("first_name", "last_name", "city", "insurance_provider")
     @classmethod
@@ -61,60 +83,93 @@ class PatientBase(BaseModel):
     @classmethod
     def validate_name_characters(cls, value: str) -> str:
         if not NAME_PATTERN.fullmatch(value):
-            raise ValueError("Name must contain only letters, hyphens, and apostrophes.")
+            raise ValueError(
+                "Name must contain only letters, hyphens, and apostrophes."
+            )
         return value
 
     @field_validator("insurance_member_id")
     @classmethod
-    def validate_insurance_member_id(cls, value: Optional[str]) -> Optional[str]:
+    def validate_insurance_member_id(
+        cls,
+        value: Optional[str],
+    ) -> Optional[str]:
         if value is None:
             return value
+
         cleaned = value.strip()
+
         if cleaned == "":
             return None
+
         if not cleaned.isalnum():
             raise ValueError("Insurance member ID must be alphanumeric.")
+
         return cleaned
 
     @field_validator("phone_number", "emergency_contact_phone")
     @classmethod
-    def validate_phone_number(cls, value: Optional[str]) -> Optional[str]:
+    def validate_phone_number(
+        cls,
+        value: Optional[str],
+    ) -> Optional[str]:
         if value is None:
             return value
+
         cleaned = value.strip()
+
         if not cleaned.isdigit():
             raise ValueError("Phone number must contain exactly 10 digits.")
+
         return cleaned
 
     @field_validator("state")
     @classmethod
     def validate_state(cls, value: str) -> str:
         state = value.strip().upper()
+
         if state not in US_STATE_ABBREVIATIONS:
-            raise ValueError("State must be a valid 2-letter U.S. state abbreviation.")
+            raise ValueError(
+                "State must be a valid 2-letter U.S. state abbreviation."
+            )
+
         return state
 
     @field_validator("sex")
     @classmethod
     def validate_sex(cls, value: str) -> str:
         normalized = value.strip().lower()
+
         if normalized not in ALLOWED_SEX_VALUES:
-            raise ValueError("Sex must be one of: Male, Female, Other, Decline to Answer.")
-        return "Decline to Answer" if normalized == "decline to answer" else normalized.title()
+            raise ValueError(
+                "Sex must be one of: Male, Female, Other, Decline to Answer."
+            )
+
+        return (
+            "Decline to Answer"
+            if normalized == "decline to answer"
+            else normalized.title()
+        )
 
     @field_validator("date_of_birth")
     @classmethod
     def validate_date_of_birth(cls, value: date) -> date:
         if value > date.today():
             raise ValueError("Date of birth cannot be in the future.")
+
         return value
 
     @field_validator("zip_code")
     @classmethod
     def validate_zip_code(cls, value: str) -> str:
         cleaned = value.strip()
+
         if not ZIP_PATTERN.fullmatch(cleaned):
-            raise ValueError("ZIP code must be 5 digits or ZIP+4 format (e.g. 12345 or 12345-6789).")
+            raise ValueError(
+                "ZIP code must be 5 digits or ZIP+4 format "
+                "(e.g. 12345 or 12345-6789)."
+            )
+
         return cleaned
 
 
@@ -125,22 +180,77 @@ class PatientCreate(PatientBase):
 class PatientUpdate(BaseModel):
     """All fields optional — partial updates allowed."""
 
-    first_name: Optional[str] = Field(default=None, min_length=1, max_length=50)
-    last_name: Optional[str] = Field(default=None, min_length=1, max_length=50)
+    first_name: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        max_length=50,
+    )
+    last_name: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        max_length=50,
+    )
     date_of_birth: Optional[date] = None
-    sex: Optional[str] = Field(default=None, min_length=1, max_length=20)
-    phone_number: Optional[str] = Field(default=None, min_length=10, max_length=10)
+    sex: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        max_length=20,
+    )
+    phone_number: Optional[str] = Field(
+        default=None,
+        min_length=10,
+        max_length=10,
+    )
     email: Optional[EmailStr] = None
-    address_line_1: Optional[str] = Field(default=None, min_length=1)
+    address_line_1: Optional[str] = Field(
+        default=None,
+        min_length=1,
+    )
     address_line_2: Optional[str] = None
-    city: Optional[str] = Field(default=None, min_length=1, max_length=100)
-    state: Optional[str] = Field(default=None, min_length=2, max_length=2)
-    zip_code: Optional[str] = Field(default=None, min_length=5, max_length=10)
+    city: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        max_length=100,
+    )
+    state: Optional[str] = Field(
+        default=None,
+        min_length=2,
+        max_length=2,
+    )
+    zip_code: Optional[str] = Field(
+        default=None,
+        min_length=5,
+        max_length=10,
+    )
     insurance_provider: Optional[str] = None
     insurance_member_id: Optional[str] = None
-    preferred_language: Optional[str] = Field(default=None, max_length=100)
+    preferred_language: Optional[str] = Field(
+        default=None,
+        max_length=100,
+    )
     emergency_contact_name: Optional[str] = None
-    emergency_contact_phone: Optional[str] = Field(default=None, min_length=10, max_length=10)
+    emergency_contact_phone: Optional[str] = Field(
+        default=None,
+        min_length=10,
+        max_length=10,
+    )
+
+    # Convert blank optional strings from Vapi ("") into None.
+    @field_validator(
+        "email",
+        "address_line_2",
+        "insurance_provider",
+        "insurance_member_id",
+        "preferred_language",
+        "emergency_contact_name",
+        "emergency_contact_phone",
+        mode="before",
+    )
+    @classmethod
+    def empty_optional_strings_to_none(cls, value):
+        if isinstance(value, str) and value.strip() == "":
+            return None
+        return value
 
     @field_validator("first_name", "last_name", "city", "insurance_provider")
     @classmethod
@@ -149,72 +259,126 @@ class PatientUpdate(BaseModel):
 
     @field_validator("first_name", "last_name")
     @classmethod
-    def validate_name_characters(cls, value: Optional[str]) -> Optional[str]:
+    def validate_name_characters(
+        cls,
+        value: Optional[str],
+    ) -> Optional[str]:
         if value is None:
             return value
+
         if not NAME_PATTERN.fullmatch(value):
-            raise ValueError("Name must contain only letters, hyphens, and apostrophes.")
+            raise ValueError(
+                "Name must contain only letters, hyphens, and apostrophes."
+            )
+
         return value
 
     @field_validator("insurance_member_id")
     @classmethod
-    def validate_insurance_member_id(cls, value: Optional[str]) -> Optional[str]:
+    def validate_insurance_member_id(
+        cls,
+        value: Optional[str],
+    ) -> Optional[str]:
         if value is None:
             return value
+
         cleaned = value.strip()
+
         if cleaned == "":
             return None
+
         if not cleaned.isalnum():
             raise ValueError("Insurance member ID must be alphanumeric.")
+
         return cleaned
 
     @field_validator("phone_number", "emergency_contact_phone")
     @classmethod
-    def validate_phone_number(cls, value: Optional[str]) -> Optional[str]:
+    def validate_phone_number(
+        cls,
+        value: Optional[str],
+    ) -> Optional[str]:
         if value is None:
             return value
+
         cleaned = value.strip()
+
         if not cleaned.isdigit():
             raise ValueError("Phone number must contain exactly 10 digits.")
+
         return cleaned
 
     @field_validator("state")
     @classmethod
-    def validate_state(cls, value: Optional[str]) -> Optional[str]:
+    def validate_state(
+        cls,
+        value: Optional[str],
+    ) -> Optional[str]:
         if value is None:
             return value
+
         state = value.strip().upper()
+
         if state not in US_STATE_ABBREVIATIONS:
-            raise ValueError("State must be a valid 2-letter U.S. state abbreviation.")
+            raise ValueError(
+                "State must be a valid 2-letter U.S. state abbreviation."
+            )
+
         return state
 
     @field_validator("sex")
     @classmethod
-    def validate_sex(cls, value: Optional[str]) -> Optional[str]:
+    def validate_sex(
+        cls,
+        value: Optional[str],
+    ) -> Optional[str]:
         if value is None:
             return value
+
         normalized = value.strip().lower()
+
         if normalized not in ALLOWED_SEX_VALUES:
-            raise ValueError("Sex must be one of: Male, Female, Other, Decline to Answer.")
-        return "Decline to Answer" if normalized == "decline to answer" else normalized.title()
+            raise ValueError(
+                "Sex must be one of: Male, Female, Other, Decline to Answer."
+            )
+
+        return (
+            "Decline to Answer"
+            if normalized == "decline to answer"
+            else normalized.title()
+        )
 
     @field_validator("date_of_birth")
     @classmethod
-    def validate_date_of_birth(cls, value: Optional[date]) -> Optional[date]:
+    def validate_date_of_birth(
+        cls,
+        value: Optional[date],
+    ) -> Optional[date]:
         if value is None:
             return value
+
         if value > date.today():
             raise ValueError("Date of birth cannot be in the future.")
+
         return value
 
     @field_validator("zip_code")
     @classmethod
-    def validate_zip_code(cls, value: Optional[str]) -> Optional[str]:
+    def validate_zip_code(
+        cls,
+        value: Optional[str],
+    ) -> Optional[str]:
         if value is None:
             return value
+
         cleaned = value.strip()
+
         if not ZIP_PATTERN.fullmatch(cleaned):
-            raise ValueError("ZIP code must be 5 digits or ZIP+4 format (e.g. 12345 or 12345-6789).")
+            raise ValueError(
+                "ZIP code must be 5 digits or ZIP+4 format "
+                "(e.g. 12345 or 12345-6789)."
+            )
+
         return cleaned
 
 
