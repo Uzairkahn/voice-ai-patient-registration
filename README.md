@@ -48,8 +48,7 @@ confirmed the collected information, the `create_patient` tool called the live F
 backend on Render, the record was persisted in Supabase, and it appeared correctly in the
 live Vercel dashboard. After this test, the dashboard showed 4 registered patient records.
 
-> Note: due to lack of international calling balance from Pakistan, the developer could not
-> personally place the call — the live number was verified by a U.S.-based caller instead.
+> Note: > Note: The live phone number was successfully tested by a U.S.-based relative, who completed the patient registration flow through the Vapi assistant.
 
 ## Architecture
 
